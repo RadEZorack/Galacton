@@ -4,7 +4,7 @@ import hashlib
 import requests
 import shutil
 import stat
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
 from sympy import preview  # For rendering LaTeX equations as images
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QMessageBox
 from PyQt5.QtWebEngineWidgets import QWebEngineView
@@ -27,6 +27,9 @@ def ensure_tmp_directory():
 class PyMLRenderer(QMainWindow):
     def __init__(self):
         super().__init__()
+
+        # Initialize the base URL for GitHub repository
+        self.base_url = None
 
         # Ensure LaTeX is in the PATH
         latex_path = shutil.which("latex")  # Check if LaTeX is in the current PATH
@@ -75,6 +78,7 @@ class PyMLRenderer(QMainWindow):
                 response = requests.get(file_path)
                 response.raise_for_status()  # Check for HTTP errors
                 pyml_content = response.text
+                self.base_url = os.path.dirname(file_path) + '/'  # Store base URL for resolving relative links
             else:
                 # Load content from a local file
                 with open(file_path, 'r') as file:
@@ -178,10 +182,17 @@ class PyMLRenderer(QMainWindow):
         except Exception as e:
             return f"<p>Error rendering LaTeX: {e}</p>\n"
 
-
+    def resolve_relative_path(self, path):
+        # If the path is relative, convert it to an absolute URL using the base URL
+        if self.base_url and not urlparse(path).scheme:
+            return urljoin(self.base_url, path)
+        return path
 
     def execute_code_from_file(self, file_path, cache_enabled=True):
         try:
+            # Resolve the path to make it an absolute URL if needed
+            file_path = self.resolve_relative_path(file_path)
+
             # Determine if the file path is local or remote
             is_remote = file_path.startswith('http')
 
