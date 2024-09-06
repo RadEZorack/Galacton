@@ -24,14 +24,14 @@ Make sure you have Python 3.x installed. You’ll also need a LaTeX distribution
 
 2. Set up a virtual environment and install dependencies:
     ```bash
-    python -m venv venv
+    python3 -m venv venv
     source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
-    pip install -r requirements.txt
+    pip3 install -r requirements.txt
     ```
 
 3. Run the application:
     ```bash
-    python main.py
+    python3 main.py
     ```
 
 ### Usage
