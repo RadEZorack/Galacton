@@ -1,15 +1,50 @@
 import sys
 import os
 import hashlib
+import requests
+import shutil
+import stat
+from urllib.parse import urlparse
 from sympy import preview  # For rendering LaTeX equations as images
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QMessageBox
 from PyQt5.QtWebEngineWidgets import QWebEngineView
 from PyQt5.QtCore import QUrl
 from lxml import etree  # For parsing XML-like syntax
 
+def ensure_tmp_directory():
+    # Define the output directory for temporary images
+    output_dir = os.path.join(os.path.dirname(__file__), "tmp")  # Make 'tmp' relative to the script's location
+
+    # Create the directory if it doesn't exist
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    # Ensure the directory has the correct permissions
+    os.chmod(output_dir, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)  # Read, write, and execute for everyone
+
+    return output_dir
+
 class PyMLRenderer(QMainWindow):
     def __init__(self):
         super().__init__()
+
+        # Ensure LaTeX is in the PATH
+        latex_path = shutil.which("latex")  # Check if LaTeX is in the current PATH
+        dvipng_path = shutil.which("dvipng")
+
+        if not latex_path or not dvipng_path:
+            if sys.platform == "win32":
+                # Example path for MiKTeX on Windows
+                os.environ["PATH"] += ";C:\\Program Files\\MiKTeX\\miktex\\bin\\x64"
+            elif sys.platform == "darwin":
+                # Example path for MacTeX on macOS
+                os.environ["PATH"] += ":/Library/TeX/texbin"
+            elif sys.platform.startswith("linux"):
+                # Example path for TeX Live on Linux
+                os.environ["PATH"] += ":/usr/local/texlive/2023/bin/x86_64-linux"
+        else:
+            print(f"LaTeX found at {latex_path}")
+
         self.setWindowTitle("Galacton - PyML Renderer")
         self.setGeometry(100, 100, 800, 600)
 
@@ -27,15 +62,30 @@ class PyMLRenderer(QMainWindow):
         self.setCentralWidget(central_widget)
 
         # Load initial PyML content from a file
-        self.load_pyml_file("index.pyml")
+        self.load_pyml_file("https://raw.githubusercontent.com/RadEZorack/Galacton/main/index.pyml")
+
+
 
     def load_pyml_file(self, file_path):
         try:
-            with open(file_path, 'r', encoding='utf-8') as file:
-                pyml_content = file.read()
+            # Check if the path is a URL
+            parsed_url = urlparse(file_path)
+            if parsed_url.scheme in ['http', 'https']:
+                # Fetch content from the URL
+                response = requests.get(file_path)
+                response.raise_for_status()  # Check for HTTP errors
+                pyml_content = response.text
+            else:
+                # Load content from a local file
+                with open(file_path, 'r') as file:
+                    pyml_content = file.read()
+
+            # Parse and render the PyML content
             self.parse_pyml(pyml_content)
+
         except Exception as e:
-            self.web_view.setHtml(f"<p>Error loading PyML file: {e}</p>")
+            self.web_view.setHtml(f"<p>Error loading PyML: {e}</p>")
+
 
     def parse_pyml(self, pyml_content):
         try:
@@ -101,31 +151,50 @@ class PyMLRenderer(QMainWindow):
 
     def render_latex_to_image(self, latex_code):
         try:
-            # Define the output directory for temporary images
-            output_dir = "tmp"
-            os.makedirs(output_dir, exist_ok=True)  # Create the directory if it doesn't exist
+            # Ensure the "tmp" directory exists and has correct permissions
+            output_dir = ensure_tmp_directory()
+
+            # Check if LaTeX and dvipng are installed
+            if not shutil.which("latex") or not shutil.which("dvipng"):
+                raise EnvironmentError("LaTeX or dvipng program is not installed or not found in PATH.")
 
             # Create a hash of the LaTeX code
             latex_hash = hashlib.md5(latex_code.encode('utf-8')).hexdigest()
-
-            # Define the output image path using the hash
             output_image_path = os.path.join(output_dir, f"{latex_hash}.png")
 
             # Check if the image already exists
             if not os.path.exists(output_image_path):
                 # Render the LaTeX code to a PNG image
-                preview(latex_code, viewer='file', filename=output_image_path, dvioptions=["-D", "150"])
+                result = preview(latex_code, viewer='file', filename=output_image_path, dvioptions=["-D", "150"])
+                if result is not None:
+                    raise RuntimeError(f"dvipng error: {result}")
 
             # Return an HTML img tag with the relative path to the generated image
             return f'<img src="{output_image_path}" alt="LaTeX Image">'
+        except EnvironmentError as e:
+            return f"<p>Error rendering LaTeX: {e}</p>\n"
+        except RuntimeError as e:
+            return f"<p>Error rendering LaTeX: {e}</p>\n"
         except Exception as e:
-            return f"Error rendering LaTeX: {e}\n"
+            return f"<p>Error rendering LaTeX: {e}</p>\n"
+
+
 
     def execute_code_from_file(self, file_path, cache_enabled=True):
         try:
+            # Determine if the file path is local or remote
+            is_remote = file_path.startswith('http')
+
             # Read the Python script content
-            with open(file_path, 'r') as file:
-                code = file.read()
+            if is_remote:
+                # Load script from the remote URL
+                response = requests.get(file_path)
+                response.raise_for_status()
+                code = response.text
+            else:
+                # Load script from the local file
+                with open(file_path, 'r') as file:
+                    code = file.read()
 
             # Generate a hash for the script content
             script_hash = hashlib.md5(code.encode('utf-8')).hexdigest()
@@ -162,6 +231,7 @@ class PyMLRenderer(QMainWindow):
                 return f"<pre>{output}</pre>\n"
         except Exception as e:
             return f"Error executing code from file: {e}\n"
+
 
 
 if __name__ == "__main__":
