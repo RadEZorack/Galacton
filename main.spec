@@ -1,12 +1,23 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
+
+# Function to read requirements.txt and extract package names
+def read_requirements():
+    with open('requirements.txt', 'r') as f:
+        lines = f.readlines()
+    packages = [line.split("==")[0].strip() for line in lines if line and not line.startswith("#")]
+    return packages
+
+# Generate hidden imports dynamically
+hidden_imports = read_requirements()
 
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
     datas=[('tmp', 'tmp'), ('assets/icon.ico', 'assets')],
-    hiddenimports=[],
+    hiddenimports=hidden_imports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
