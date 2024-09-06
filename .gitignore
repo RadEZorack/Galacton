@@ -16,8 +16,8 @@ env/
 *.out
 *.toc
 
-# Ignore images generated during runtime
-images/
+# Ignore temporary files and directories such as images generated during runtime
+tmp/
 
 # OS-specific files
 .DS_Store

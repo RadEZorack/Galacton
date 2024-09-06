@@ -101,7 +101,7 @@ class PyMLRenderer(QMainWindow):
     def render_latex_to_image(self, latex_code):
         try:
             # Define the output directory for images
-            output_dir = "images"
+            output_dir = "tmp"
             os.makedirs(output_dir, exist_ok=True)  # Create the directory if it doesn't exist
 
             # Define the output image path (relative path)
