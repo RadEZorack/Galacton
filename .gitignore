@@ -1,0 +1,37 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+venv/
+env/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# LaTeX auxiliary files
+*.aux
+*.log
+*.out
+*.toc
+
+# Ignore images generated during runtime
+images/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# PyInstaller output
+dist/
+build/
+
+# Package files
+*.egg-info/
+*.egg
+*.whl
+
+# IDE-specific files
+.vscode/
+.idea/

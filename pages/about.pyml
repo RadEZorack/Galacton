@@ -1,0 +1,27 @@
+<document>
+  <meta>
+    title: "About Quantum Mechanics"
+    author: "Jane Doe"
+    date: "2024-09-04"
+  </meta>
+
+  <section>
+    <header>Understanding Quantum Mechanics</header>
+    <p>Quantum mechanics is a branch of physics that deals with the behavior of particles at atomic and subatomic scales. It is based on principles that often contradict classical mechanics, such as the idea that particles can exist in multiple states simultaneously.</p>
+  </section>
+
+  <section>
+    <header>Key Concepts</header>
+    <p>The core concepts of quantum mechanics include:</p>
+    <ul>
+      <li>Wave-Particle Duality</li>
+      <li>Quantum Superposition</li>
+      <li>Entanglement</li>
+      <li>Heisenberg's Uncertainty Principle</li>
+    </ul>
+  </section>
+
+  <footer>
+    <link href="index.pyml">Back to Introduction</link>
+  </footer>
+</document>

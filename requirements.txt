@@ -1,0 +1,5 @@
+pyinstaller==6.10.0
+lxml==5.3.0
+PyQt5==5.15.11
+PyQtWebEngine==5.15.7
+sympy==1.13.2
