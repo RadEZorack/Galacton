@@ -1,5 +1,6 @@
 import sys
 import os
+import hashlib
 from sympy import preview  # For rendering LaTeX equations as images
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QMessageBox
 from PyQt5.QtWebEngineWidgets import QWebEngineView
@@ -61,14 +62,14 @@ class PyMLRenderer(QMainWindow):
                     # Convert LaTeX to an image and embed it
                     img_tag = self.render_latex_to_image(element.text.strip())
                     content += f"<p>{img_tag}</p>\n"
-                elif element.tag == 'python':
+                elif element.tag == 'python':  # Handle the <python> tag
                     src_file = element.get('src')
+                    cache_enabled = element.get('cache', 'True').lower() == 'true'  # Default to True if not specified
                     if src_file:
-                        content += self.execute_code_from_file(src_file)  # Execute Python code from file
+                        content += self.execute_code_from_file(src_file, cache_enabled)  # Execute Python code from file
                     else:
                         content += "Error: No source file specified.\n"
                 elif element.tag == 'link':
-                    # Handle links to other .pyml files
                     content += f"<a href='{element.get('href')}'>{element.text}</a>\n"
                 # Add more handlers for other elements as needed...
 
@@ -100,31 +101,68 @@ class PyMLRenderer(QMainWindow):
 
     def render_latex_to_image(self, latex_code):
         try:
-            # Define the output directory for images
+            # Define the output directory for temporary images
             output_dir = "tmp"
             os.makedirs(output_dir, exist_ok=True)  # Create the directory if it doesn't exist
 
-            # Define the output image path (relative path)
-            output_image_path = os.path.join(output_dir, "latex_image.png")
+            # Create a hash of the LaTeX code
+            latex_hash = hashlib.md5(latex_code.encode('utf-8')).hexdigest()
 
-            # Render the LaTeX code to a PNG image
-            preview(latex_code, viewer='file', filename=output_image_path, dvioptions=["-D", "150"])
+            # Define the output image path using the hash
+            output_image_path = os.path.join(output_dir, f"{latex_hash}.png")
+
+            # Check if the image already exists
+            if not os.path.exists(output_image_path):
+                # Render the LaTeX code to a PNG image
+                preview(latex_code, viewer='file', filename=output_image_path, dvioptions=["-D", "150"])
 
             # Return an HTML img tag with the relative path to the generated image
             return f'<img src="{output_image_path}" alt="LaTeX Image">'
         except Exception as e:
             return f"Error rendering LaTeX: {e}\n"
 
-    def execute_code_from_file(self, file_path):
+    def execute_code_from_file(self, file_path, cache_enabled=True):
         try:
+            # Read the Python script content
             with open(file_path, 'r') as file:
                 code = file.read()
+
+            # Generate a hash for the script content
+            script_hash = hashlib.md5(code.encode('utf-8')).hexdigest()
+            cached_output_html = f"tmp/{script_hash}.html"
+            cached_output_img = f"tmp/{script_hash}.png"
+
+            # Check if caching is enabled and the cached output exists
+            if cache_enabled:
+                if os.path.exists(cached_output_html):
+                    # Return the cached HTML content if it exists
+                    return f'<iframe src="{cached_output_html}" width="100%" height="600" frameborder="0" allowfullscreen></iframe>'
+                elif os.path.exists(cached_output_img):
+                    # Return the cached image if it exists
+                    return f'<img src="{cached_output_img}" alt="Python Output Image" />'
+
+            # Execute the script and capture the output
             exec_locals = {}
             exec(code, {}, exec_locals)
-            output = exec_locals.get("output", "")  # Retrieve output variable if set in code
-            return f"<pre>{output}</pre>\n"
+            output = exec_locals.get("output", "")
+
+            # Determine the type of output (image or HTML)
+            if output.endswith('.png'):
+                # Cache the image output if caching is enabled
+                if cache_enabled:
+                    os.rename(output, cached_output_img)
+                return f'<img src="{cached_output_img if cache_enabled else output}" alt="Python Output Image" />'
+            elif output.endswith('.html'):
+                # Cache the HTML output if caching is enabled
+                if cache_enabled:
+                    os.rename(output, cached_output_html)
+                return f'<iframe src="{cached_output_html if cache_enabled else output}" width="100%" height="600" frameborder="0" allowfullscreen></iframe>'
+            else:
+                # Default to displaying raw output
+                return f"<pre>{output}</pre>\n"
         except Exception as e:
             return f"Error executing code from file: {e}\n"
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

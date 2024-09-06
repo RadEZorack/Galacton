@@ -21,6 +21,12 @@
     <python src="scripts/analysis.py" />
   </section>
 
+  <section>
+    <header>Visualizing Quantum States</header>
+    <p>This section provides an interactive graph to visualize quantum states over time.</p>
+    <python src="scripts/plot_quantum_states.py" cache="True" />
+  </section>
+
   <footer>
     <link href="pages/about.pyml">Learn More About Quantum Mechanics</link>
   </footer>
