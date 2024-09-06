@@ -8,12 +8,12 @@
   <section>
     <header>Welcome to Quantum Mechanics</header>
     <p>This document provides an overview of quantum mechanics, exploring fundamental concepts such as wave-particle duality, superposition, and entanglement.</p>
-    <latex_block>
+    <latex>
       The Schrödinger equation is expressed as:
       \[
       i \hbar \frac{\partial}{\partial t} \Psi(x,t) = -\frac{\hbar^2}{2m} \frac{\partial^2}{\partial x^2} \Psi(x,t)
       \]
-    </latex_block>
+    </latex>
   </section>
 
   <section>

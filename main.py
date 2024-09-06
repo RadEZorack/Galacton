@@ -57,7 +57,7 @@ class PyMLRenderer(QMainWindow):
                     content += f"<h1>{element.text}</h1>\n"
                 elif element.tag == 'p':
                     content += f"<p>{element.text}</p>\n"
-                elif element.tag == 'latex_block':
+                elif element.tag == 'latex':
                     # Convert LaTeX to an image and embed it
                     img_tag = self.render_latex_to_image(element.text.strip())
                     content += f"<p>{img_tag}</p>\n"
