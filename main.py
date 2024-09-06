@@ -61,7 +61,7 @@ class PyMLRenderer(QMainWindow):
                     # Convert LaTeX to an image and embed it
                     img_tag = self.render_latex_to_image(element.text.strip())
                     content += f"<p>{img_tag}</p>\n"
-                elif element.tag == 'interactive_cell':
+                elif element.tag == 'python':
                     src_file = element.get('src')
                     if src_file:
                         content += self.execute_code_from_file(src_file)  # Execute Python code from file

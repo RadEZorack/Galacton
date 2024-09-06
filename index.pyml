@@ -18,8 +18,7 @@
 
   <section>
     <header>Experiment Analysis</header>
-    <interactive_cell language="python" src="scripts/analysis.py">
-    </interactive_cell>
+    <python src="scripts/analysis.py" />
   </section>
 
   <footer>
