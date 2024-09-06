@@ -7,7 +7,7 @@ import stat
 from urllib.parse import urlparse, urljoin
 from sympy import preview  # For rendering LaTeX equations as images
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QMessageBox
-from PyQt5.QtWebEngineWidgets import QWebEngineView
+from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage
 from PyQt5.QtCore import QUrl
 from lxml import etree  # For parsing XML-like syntax
 
@@ -24,12 +24,28 @@ def ensure_tmp_directory():
 
     return output_dir
 
+class CustomWebEnginePage(QWebEnginePage):
+    def __init__(self, renderer):
+        super().__init__()
+        self.renderer = renderer
+
+    def acceptNavigationRequest(self, url, nav_type, is_main_frame):
+        url_str = url.toString()
+        # If the URL is a .pyml file, handle it manually
+        if url_str.endswith('.pyml'):
+            self.renderer.load_pyml_file(url_str)
+            return False  # Prevent default navigation
+        # Allow normal navigation for other URLs
+        return True
+
 class PyMLRenderer(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        # Initialize the base URL for GitHub repository
-        self.base_url = None
+        self.root_base_url = None  # Store the root base URL
+        self.current_base_url = None  # Store the current base URL for relative links
+        self.initial_load = True  # Flag to prevent recursive handling
+        self.handling_link = False  # Flag to prevent recursive handling
 
         # Ensure LaTeX is in the PATH
         latex_path = shutil.which("latex")  # Check if LaTeX is in the current PATH
@@ -56,7 +72,9 @@ class PyMLRenderer(QMainWindow):
 
         # Web view for displaying content
         self.web_view = QWebEngineView()
-        self.web_view.urlChanged.connect(self.handle_link_click)
+        self.web_page = CustomWebEnginePage(self)
+        self.web_view.setPage(self.web_page)
+        # self.web_view.urlChanged.connect(self.handle_link_click)
         layout.addWidget(self.web_view)
 
         # Central widget setup
@@ -78,11 +96,20 @@ class PyMLRenderer(QMainWindow):
                 response = requests.get(file_path)
                 response.raise_for_status()  # Check for HTTP errors
                 pyml_content = response.text
-                self.base_url = os.path.dirname(file_path) + '/'  # Store base URL for resolving relative links
+                
+                # Store the root base URL if not already set
+                if not self.root_base_url:
+                    self.root_base_url = os.path.dirname(file_path) + '/'
+
+                # Update the current base URL to the directory of the current file
+                self.current_base_url = os.path.dirname(file_path) + '/'
+
             else:
                 # Load content from a local file
                 with open(file_path, 'r') as file:
                     pyml_content = file.read()
+                    self.current_base_url = os.path.dirname(os.path.abspath(file_path)) + '/'  # Store local base path
+
 
             # Parse and render the PyML content
             self.parse_pyml(pyml_content)
@@ -124,7 +151,9 @@ class PyMLRenderer(QMainWindow):
                     else:
                         content += "Error: No source file specified.\n"
                 elif element.tag == 'link':
-                    content += f"<a href='{element.get('href')}'>{element.text}</a>\n"
+                    # Resolve relative URLs
+                    href = self.resolve_relative_path(element.get('href'))
+                    content += f"<a href='{href}'>{element.text}</a>\n"
                 # Add more handlers for other elements as needed...
 
             # Close HTML content
@@ -140,17 +169,28 @@ class PyMLRenderer(QMainWindow):
             self.web_view.setHtml(f"<p>Error parsing PyML: {e}</p>")
 
     def handle_link_click(self, url):
-        # Convert the URL to a local file path
-        pyml_file = url.toLocalFile()
+        # Only handle the link if it's not the initial page load
+        if self.initial_load:
+            self.initial_load = False
+            return
+        
+        # Avoid recursive handling
+        if self.handling_link:
+            return
 
-        # Print the path for debugging
-        print(f"Resolved file path: {pyml_file}")
+        # Start handling the link
+        self.handling_link = True
+        url_str = url.toString()
+        print(f"url_str {url_str}")
 
-        # Check if the file is a valid .pyml file and exists
-        if pyml_file.endswith('.pyml') and os.path.exists(pyml_file):
-            self.load_pyml_file(pyml_file)
+        if url_str.endswith('.pyml'):
+            self.load_pyml_file(url_str)
         else:
-            print(f"Error: File {pyml_file} does not exist.")
+            # For other links, navigate normally
+            self.web_view.setUrl(url)
+
+        # End handling the link
+        self.handling_link = False
 
 
     def render_latex_to_image(self, latex_code):
@@ -183,9 +223,10 @@ class PyMLRenderer(QMainWindow):
             return f"<p>Error rendering LaTeX: {e}</p>\n"
 
     def resolve_relative_path(self, path):
-        # If the path is relative, convert it to an absolute URL using the base URL
-        if self.base_url and not urlparse(path).scheme:
-            return urljoin(self.base_url, path)
+        # Convert relative paths to absolute URLs or local paths
+        if self.root_base_url and not urlparse(path).scheme:
+            # Use urljoin with the root base URL to correctly handle "../" and relative paths
+            return urljoin(self.root_base_url, path)
         return path
 
     def execute_code_from_file(self, file_path, cache_enabled=True):
