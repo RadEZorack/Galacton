@@ -4,10 +4,11 @@ import hashlib
 import requests
 import shutil
 import stat
-from urllib.parse import urlparse, urljoin
+import textwrap
+from urllib.parse import urlparse, urljoin, unquote
 from sympy import preview  # For rendering LaTeX equations as images
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QMessageBox
-from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage
+from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage, QWebEngineSettings
 from PyQt5.QtCore import QUrl
 from lxml import etree  # For parsing XML-like syntax
 
@@ -24,6 +25,13 @@ def ensure_tmp_directory():
 
     return output_dir
 
+def convert_file_url_to_local_path(file_url):
+    # Convert 'file://' URL to local path
+    if file_url.startswith('file://'):
+        # Remove 'file://' prefix and unquote to handle spaces or special characters
+        return unquote(file_url[7:])
+    return file_url
+
 class CustomWebEnginePage(QWebEnginePage):
     def __init__(self, renderer):
         super().__init__()
@@ -39,13 +47,14 @@ class CustomWebEnginePage(QWebEnginePage):
         return True
 
 class PyMLRenderer(QMainWindow):
-    def __init__(self):
+    def __init__(self, enable_javascript=True):
         super().__init__()
 
         self.root_base_url = None  # Store the root base URL
         self.current_base_url = None  # Store the current base URL for relative links
         self.initial_load = True  # Flag to prevent recursive handling
         self.handling_link = False  # Flag to prevent recursive handling
+        self.enable_javascript = enable_javascript
 
         # Ensure LaTeX is in the PATH
         latex_path = shutil.which("latex")  # Check if LaTeX is in the current PATH
@@ -82,13 +91,29 @@ class PyMLRenderer(QMainWindow):
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
 
+        # Apply initial JavaScript setting
+        self.apply_javascript_setting()
+
         # Load initial PyML content from a file
         self.load_pyml_file("https://raw.githubusercontent.com/RadEZorack/Galacton/main/index.pyml")
+        # self.load_pyml_file("index.pyml")
 
+    def apply_javascript_setting(self):
+        # Use QWebEngineSettings to enable or disable JavaScript
+        settings = self.web_view.settings()
+        settings.setAttribute(QWebEngineSettings.JavascriptEnabled, self.enable_javascript)
 
+    def toggle_javascript(self):
+        # Update JavaScript setting based on checkbox
+        self.enable_javascript = self.javascript_checkbox.isChecked()
+        self.apply_javascript_setting()
 
     def load_pyml_file(self, file_path):
         try:
+            # Convert file URL to a local path if necessary
+            if file_path.startswith('file://'):
+                file_path = convert_file_url_to_local_path(file_path)
+                
             # Check if the path is a URL
             parsed_url = urlparse(file_path)
             if parsed_url.scheme in ['http', 'https']:
@@ -135,25 +160,28 @@ class PyMLRenderer(QMainWindow):
 
             # Process elements
             for element in root.iter():
-                if element.tag == 'header':
-                    content += f"<h1>{element.text}</h1>\n"
-                elif element.tag == 'p':
-                    content += f"<p>{element.text}</p>\n"
+                attrs = ' '.join(f'{key}="{value}"' for key, value in element.attrib.items())
+                if element.tag == 'meta':
+                    # parse the meta tag if needed. But don't include in final output
+                    pass
                 elif element.tag == 'latex':
                     # Convert LaTeX to an image and embed it
                     img_tag = self.render_latex_to_image(element.text.strip())
-                    content += f"<p>{img_tag}</p>\n"
+                    content += f"<div {attrs}>{img_tag}</div>\n"
                 elif element.tag == 'python':  # Handle the <python> tag
                     src_file = element.get('src')
-                    cache_enabled = element.get('cache', 'True').lower() == 'true'  # Default to True if not specified
-                    if src_file:
-                        content += self.execute_code_from_file(src_file, cache_enabled)  # Execute Python code from file
-                    else:
-                        content += "Error: No source file specified.\n"
-                elif element.tag == 'link':
+                    cache_enabled = element.get('cache', 'True').lower() == 'true'
+
+                    # Use the new unified function to handle both inline code and source files
+                    content += self.execute_python_code(element.text, src_file, cache_enabled)
+
+                elif element.tag == 'a':
                     # Resolve relative URLs
                     href = self.resolve_relative_path(element.get('href'))
                     content += f"<a href='{href}'>{element.text}</a>\n"
+                else:
+                    # Handle all other tags generically, including their attributes
+                    content += f"<{element.tag} {attrs}>{element.text or ''}</{element.tag}>\n"
                 # Add more handlers for other elements as needed...
 
             # Close HTML content
@@ -223,30 +251,42 @@ class PyMLRenderer(QMainWindow):
             return f"<p>Error rendering LaTeX: {e}</p>\n"
 
     def resolve_relative_path(self, path):
-        # Convert relative paths to absolute URLs or local paths
-        if self.root_base_url and not urlparse(path).scheme:
-            # Use urljoin with the root base URL to correctly handle "../" and relative paths
+        # If the path is already a complete URL, return it as is
+        if urlparse(path).scheme in ['http', 'https']:
+            return path
+
+        # If working with a remote base URL
+        if self.root_base_url and self.root_base_url.startswith('http'):
             return urljoin(self.root_base_url, path)
-        return path
 
-    def execute_code_from_file(self, file_path, cache_enabled=True):
+        # Otherwise, assume it's a local file path
+        return os.path.abspath(os.path.join(self.current_base_url, path))
+
+
+    def execute_python_code(self, inline_code=None, src_file=None, cache_enabled=True):
         try:
-            # Resolve the path to make it an absolute URL if needed
-            file_path = self.resolve_relative_path(file_path)
+            # Determine if we're executing inline code or loading from a file
+            if src_file:
+                # Resolve the path to make it an absolute URL if needed
+                file_path = self.resolve_relative_path(src_file)
 
-            # Determine if the file path is local or remote
-            is_remote = file_path.startswith('http')
+                # Determine if the file path is local or remote
+                is_remote = file_path.startswith('http')
 
-            # Read the Python script content
-            if is_remote:
-                # Load script from the remote URL
-                response = requests.get(file_path)
-                response.raise_for_status()
-                code = response.text
+                # Read the Python script content
+                if is_remote:
+                    # Load script from the remote URL
+                    response = requests.get(file_path)
+                    response.raise_for_status()
+                    code = response.text
+                else:
+                    # Load script from the local file
+                    with open(file_path, 'r') as file:
+                        code = file.read()
+
             else:
-                # Load script from the local file
-                with open(file_path, 'r') as file:
-                    code = file.read()
+                # Use inline code directly, dedenting to handle any leading spaces
+                code = textwrap.dedent(inline_code or "")
 
             # Generate a hash for the script content
             script_hash = hashlib.md5(code.encode('utf-8')).hexdigest()
@@ -256,10 +296,8 @@ class PyMLRenderer(QMainWindow):
             # Check if caching is enabled and the cached output exists
             if cache_enabled:
                 if os.path.exists(cached_output_html):
-                    # Return the cached HTML content if it exists
                     return f'<iframe src="{cached_output_html}" width="100%" height="600" frameborder="0" allowfullscreen></iframe>'
                 elif os.path.exists(cached_output_img):
-                    # Return the cached image if it exists
                     return f'<img src="{cached_output_img}" alt="Python Output Image" />'
 
             # Execute the script and capture the output
@@ -268,21 +306,19 @@ class PyMLRenderer(QMainWindow):
             output = exec_locals.get("output", "")
 
             # Determine the type of output (image or HTML)
-            if output.endswith('.png'):
-                # Cache the image output if caching is enabled
-                if cache_enabled:
-                    os.rename(output, cached_output_img)
-                return f'<img src="{cached_output_img if cache_enabled else output}" alt="Python Output Image" />'
-            elif output.endswith('.html'):
-                # Cache the HTML output if caching is enabled
-                if cache_enabled:
-                    os.rename(output, cached_output_html)
-                return f'<iframe src="{cached_output_html if cache_enabled else output}" width="100%" height="600" frameborder="0" allowfullscreen></iframe>'
-            else:
-                # Default to displaying raw output
-                return f"<pre>{output}</pre>\n"
+            if isinstance(output, str):
+                if output.endswith('.png'):
+                    if cache_enabled:
+                        os.rename(output, cached_output_img)
+                    return f'<img src="{cached_output_img if cache_enabled else output}" alt="Python Output Image" />'
+                elif output.endswith('.html'):
+                    if cache_enabled:
+                        os.rename(output, cached_output_html)
+                    return f'<iframe src="{cached_output_html if cache_enabled else output}" width="100%" height="600" frameborder="0" allowfullscreen></iframe>'
+            # Default to displaying raw output if it's not a recognized file type
+            return f"<pre>{output}</pre>\n"
         except Exception as e:
-            return f"Error executing code from file: {e}\n"
+            return f"Error executing code: {e}\n"
 
 
 

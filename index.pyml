@@ -6,7 +6,7 @@
   </meta>
 
   <section>
-    <header>Welcome to Quantum Mechanics</header>
+    <h1>Welcome to Quantum Mechanics</h1>
     <p>This document provides an overview of quantum mechanics, exploring fundamental concepts such as wave-particle duality, superposition, and entanglement.</p>
     <latex>
       The Schrödinger equation is expressed as:
@@ -17,17 +17,39 @@
   </section>
 
   <section>
-    <header>Experiment Analysis</header>
+    <h1>Experiment Analysis</h1>
     <python src="scripts/analysis.py" />
   </section>
 
   <section>
-    <header>Visualizing Quantum States</header>
+    <h1>Visualizing Quantum States</h1>
     <p>This section provides an interactive graph to visualize quantum states over time.</p>
     <python src="scripts/plot_quantum_states.py" cache="True" />
+    <python>
+        # Example Python code to add two numbers
+        a = 5
+        b = 10
+        output = a + b
+        print(f"The result of adding {a} and {b} is: {output}")
+    </python>
+  </section>
+
+  <section>
+    <h1>Welcome to PyML with JavaScript</h1>
+    <p>This is an example where you can run JavaScript.</p>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+    <script type="text/javascript">
+        function updateContent() {
+            $("p").text("This content was updated using jQuery!");
+        }
+    </script>
+
+    <button onclick="updateContent()">Update Content</button>
   </section>
 
   <footer>
-    <link href="pages/about.pyml">Learn More About Quantum Mechanics</link>
+    <a href="pages/about.pyml">Learn More About Quantum Mechanics</a>
   </footer>
 </document>
