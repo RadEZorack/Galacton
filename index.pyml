@@ -19,7 +19,7 @@
 
   <section>
     <h1>Python From File</h1>
-    <h2>Visualizing Quantum States With</h2>
+    <h2>Visualizing Quantum States</h2>
     <p>This section provides an interactive graph to visualize quantum states over time.</p>
     <python src="scripts/plot_quantum_states.py" cache="True" />
     <h1>Inline Python</h1>
