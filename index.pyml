@@ -33,6 +33,30 @@
         print(f"The result of adding {a} and {b} is: {output}")
     </python>
   </section>
+  
+  <section>
+    <h1>Inline R code</h1>
+    <r>
+      # Generate random data
+      # set.seed(42)
+      data <- rnorm(100, mean = 50, sd = 10)
+
+      # Calculate basic statistics
+      mean_value <- mean(data)
+      sd_value <- sd(data)
+
+      # Print the statistics
+      cat("Mean of the data:", mean_value, "\n")
+      cat("Standard deviation of the data:", sd_value, "\n")
+
+      # Create a histogram and save it to a file
+      png(filename = "tmp/r_output_histogram.png")
+      hist(data, main = "Histogram of Random Data", xlab = "Values", col = "skyblue", border = "white")
+      dev.off()
+
+      cat("&lt;img src=&quot;tmp/r_output_histogram.png&quot; alt=&quot;R Output Image&quot; /&gt;")
+    </r>
+  </section>
 
   <section>
     <h1>Welcome to PyML with JavaScript</h1>

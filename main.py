@@ -5,6 +5,9 @@ import requests
 import shutil
 import stat
 import textwrap
+import subprocess
+import re
+import html
 from urllib.parse import urlparse, urljoin, unquote
 from sympy import preview  # For rendering LaTeX equations as images
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLineEdit, QPushButton, QHBoxLayout
@@ -24,6 +27,31 @@ def ensure_tmp_directory():
     os.chmod(output_dir, stat.S_IRWXU | stat.S_IRWXG | stat.S_IRWXO)  # Read, write, and execute for everyone
 
     return output_dir
+
+def escape_special_chars(text):
+    """Escapes special characters like <, >, and & in code blocks."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+def unescape_special_chars(escaped_text):
+    """Unescapes special characters like &lt;, &gt;, and &amp; back to their original form."""
+    return html.unescape(escaped_text)
+
+def preprocess_pyml_content(pyml_content):
+    """Preprocess the .pyml content to escape special characters within code blocks."""
+    # Define a regex pattern to match content within <r> and <python> tags
+    code_block_pattern = r'(<(python|r)>)([\s\S]*?)(<\/\2>)'
+
+    # Replace each match with escaped content
+    def escape_code_block(match):
+        # Full match includes opening and closing tags
+        opening_tag, language, code_content, closing_tag = match.groups()
+        # Escape special characters in the code content
+        escaped_content = escape_special_chars(code_content)
+        # Return the escaped code block
+        return f"{opening_tag}{escaped_content}{closing_tag}"
+
+    # Apply regex substitution to escape special characters in code blocks
+    return re.sub(code_block_pattern, escape_code_block, pyml_content)
 
 def convert_file_url_to_local_path(file_url):
     # Convert 'file://' URL to local path
@@ -116,8 +144,8 @@ class PyMLRenderer(QMainWindow):
         # self.load_pyml_file("https://raw.githubusercontent.com/RadEZorack/Galacton/main/index.pyml")
         # self.load_pyml_file("index.pyml")
         # Set initial content URL
-        initial_url = "https://raw.githubusercontent.com/RadEZorack/Galacton/main/index.pyml"
-        # initial_url = "index.pyml"
+        # initial_url = "https://raw.githubusercontent.com/RadEZorack/Galacton/main/index.pyml"
+        initial_url = "index.pyml"
         # self.url_bar.setText(initial_url)  # Set the initial URL in the URL bar
         self.load_pyml_file(initial_url)
 
@@ -180,11 +208,13 @@ class PyMLRenderer(QMainWindow):
         except Exception as e:
             self.web_view.setHtml(f"<p>Error loading PyML: {e}</p>")
 
-
     def parse_pyml(self, pyml_content):
         try:
-            # Parse the .pyml content
-            root = etree.fromstring(pyml_content)
+            # Preprocess the content to escape special characters within code blocks
+            preprocessed_content = preprocess_pyml_content(pyml_content)
+
+            # Now parse the preprocessed content
+            root = etree.fromstring(preprocessed_content)
 
             # Start building the HTML content
             content = """
@@ -210,13 +240,23 @@ class PyMLRenderer(QMainWindow):
                     src_file = element.get('src')
                     cache_enabled = element.get('cache', 'True').lower() == 'true'
 
+                    escaped_code = escape_special_chars(element.text) if element.text else None
                     # Use the new unified function to handle both inline code and source files
-                    content += self.execute_python_code(element.text, src_file, cache_enabled)
+                    content += self.execute_python_code(escaped_code, src_file, cache_enabled)
 
+                elif element.tag == 'r':  # Handle the <r> tag
+                    src_file = element.get('src')
+                    cache_enabled = element.get('cache', 'True').lower() == 'true'
+
+                    escaped_code = escape_special_chars(element.text) if element.text else None
+
+                    # Use the new function to handle both inline R code and source files
+                    content += self.execute_r_code(escaped_code, src_file, cache_enabled)
+                    
                 elif element.tag == 'a':
                     # Resolve relative URLs
                     href = self.resolve_relative_path(element.get('href'))
-                    content += f"<a href='{href}'>{element.text}</a>\n"
+                    content += f"<a href='{href}' {attrs}>{element.text}</a>\n"
                 else:
                     # Handle all other tags generically, including their attributes
                     content += f"<{element.tag} {attrs}>{element.text or ''}</{element.tag}>\n"
@@ -330,6 +370,9 @@ class PyMLRenderer(QMainWindow):
                 # Use inline code directly, dedenting to handle any leading spaces
                 code = textwrap.dedent(inline_code or "")
 
+            # Unescape special characters before execution
+            code = unescape_special_chars(code)
+
             # Generate a hash for the script content
             script_hash = hashlib.md5(code.encode('utf-8')).hexdigest()
             cached_output_html = f"tmp/{script_hash}.html"
@@ -362,6 +405,61 @@ class PyMLRenderer(QMainWindow):
         except Exception as e:
             return f"Error executing code: {e}\n"
 
+    def execute_r_code(self, inline_code=None, src_file=None, cache_enabled=True):
+        try:
+            # Determine if we're executing inline code or loading from a file
+            if src_file:
+                # Resolve the path to make it an absolute URL if needed
+                file_path = self.resolve_relative_path(src_file)
+
+                # Determine if the file path is local or remote
+                is_remote = file_path.startswith('http')
+
+                # Read the R script content
+                if is_remote:
+                    # Load script from the remote URL
+                    response = requests.get(file_path)
+                    response.raise_for_status()
+                    code = response.text
+                else:
+                    # Load script from the local file
+                    with open(file_path, 'r') as file:
+                        code = file.read()
+
+            else:
+                # Use inline code directly, dedenting to handle any leading spaces
+                code = textwrap.dedent(inline_code or "")
+
+            # Unescape special characters before execution
+            code = unescape_special_chars(code)
+
+            # # Generate a hash for the script content
+            # script_hash = hashlib.md5(code.encode('utf-8')).hexdigest()
+            # cached_output_html = f"tmp/{script_hash}.html"
+            # cached_output_img = f"tmp/{script_hash}.png"
+
+            # # Check if caching is enabled and the cached output exists
+            # if cache_enabled:
+            #     if os.path.exists(cached_output_html):
+            #         return f'<iframe src="{cached_output_html}" width="100%" height="600" frameborder="0" allowfullscreen></iframe>'
+            #     elif os.path.exists(cached_output_img):
+            #         return f'<img src="{cached_output_img}" alt="R Output Image" />'
+
+            # Execute the R script and capture the output
+            with open("tmp/script.R", "w") as temp_file:
+                temp_file.write(code)
+
+            result = subprocess.run(["Rscript", "tmp/script.R"], capture_output=True, text=True)
+
+            if result.returncode != 0:
+                return f"Error executing R code: {result.stderr}"
+
+            # Process the output and return
+            output = unescape_special_chars(result.stdout).replace("\n", "<br>")
+            return f"<div>{output}</div>\n"
+
+        except Exception as e:
+            return f"Error executing R code: {e}\n"
 
 
 if __name__ == "__main__":
