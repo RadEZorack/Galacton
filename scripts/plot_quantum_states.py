@@ -13,4 +13,4 @@ fig.update_layout(title='Quantum State Visualization', xaxis_title='Time', yaxis
 # Save the plot as an HTML file
 output_html = 'tmp/quantum_states.html'
 fig.write_html(output_html)
-output = output_html
+print(f'<iframe src="{output_html}" width="100%" height="600" frameborder="0" allowfullscreen></iframe>')

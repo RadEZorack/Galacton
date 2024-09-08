@@ -8,6 +8,8 @@ import textwrap
 import subprocess
 import re
 import html
+import io
+import contextlib
 from urllib.parse import urlparse, urljoin, unquote
 from sympy import preview  # For rendering LaTeX equations as images
 from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLineEdit, QPushButton, QHBoxLayout
@@ -144,8 +146,8 @@ class PyMLRenderer(QMainWindow):
         # self.load_pyml_file("https://raw.githubusercontent.com/RadEZorack/Galacton/main/index.pyml")
         # self.load_pyml_file("index.pyml")
         # Set initial content URL
-        # initial_url = "https://raw.githubusercontent.com/RadEZorack/Galacton/main/index.pyml"
-        initial_url = "index.pyml"
+        initial_url = "https://raw.githubusercontent.com/RadEZorack/Galacton/main/index.pyml"
+        # initial_url = "index.pyml"
         # self.url_bar.setText(initial_url)  # Set the initial URL in the URL bar
         self.load_pyml_file(initial_url)
 
@@ -373,35 +375,45 @@ class PyMLRenderer(QMainWindow):
             # Unescape special characters before execution
             code = unescape_special_chars(code)
 
-            # Generate a hash for the script content
-            script_hash = hashlib.md5(code.encode('utf-8')).hexdigest()
-            cached_output_html = f"tmp/{script_hash}.html"
-            cached_output_img = f"tmp/{script_hash}.png"
+            # # Generate a hash for the script content
+            # script_hash = hashlib.md5(code.encode('utf-8')).hexdigest()
+            # cached_output_html = f"tmp/{script_hash}.html"
+            # cached_output_img = f"tmp/{script_hash}.png"
 
-            # Check if caching is enabled and the cached output exists
-            if cache_enabled:
-                if os.path.exists(cached_output_html):
-                    return f'<iframe src="{cached_output_html}" width="100%" height="600" frameborder="0" allowfullscreen></iframe>'
-                elif os.path.exists(cached_output_img):
-                    return f'<img src="{cached_output_img}" alt="Python Output Image" />'
+            # # Check if caching is enabled and the cached output exists
+            # if cache_enabled:
+            #     if os.path.exists(cached_output_html):
+            #         return f'<iframe src="{cached_output_html}" width="100%" height="600" frameborder="0" allowfullscreen></iframe>'
+            #     elif os.path.exists(cached_output_img):
+            #         return f'<img src="{cached_output_img}" alt="Python Output Image" />'
 
-            # Execute the script and capture the output
-            exec_locals = {}
-            exec(code, {}, exec_locals)
-            output = exec_locals.get("output", "")
+            # Capture the output of the script execution
+            output_buffer = io.StringIO()
+            with contextlib.redirect_stdout(output_buffer):
+                exec_locals = {}
+                exec_globals = {}
+                exec(code, exec_globals, exec_locals)
 
-            # Determine the type of output (image or HTML)
-            if isinstance(output, str):
-                if output.endswith('.png'):
-                    if cache_enabled:
-                        os.rename(output, cached_output_img)
-                    return f'<img src="{cached_output_img if cache_enabled else output}" alt="Python Output Image" />'
-                elif output.endswith('.html'):
-                    if cache_enabled:
-                        os.rename(output, cached_output_html)
-                    return f'<iframe src="{cached_output_html if cache_enabled else output}" width="100%" height="600" frameborder="0" allowfullscreen></iframe>'
-            # Default to displaying raw output if it's not a recognized file type
-            return f"<pre>{output}</pre>\n"
+            # Get the captured output
+            output = output_buffer.getvalue()
+
+            # Convert line breaks to <br> tags to maintain formatting
+            output_html = output.replace("\n", "<br>")
+
+            return f"<div>{output_html}</div>\n"
+
+            #     # Determine the type of output (image or HTML)
+            #     if isinstance(output, str):
+            #         if output.endswith('.png'):
+            #             if cache_enabled:
+            #                 os.rename(output, cached_output_img)
+            #             return f'<img src="{cached_output_img if cache_enabled else output}" alt="Python Output Image" />'
+            #         elif output.endswith('.html'):
+            #             if cache_enabled:
+            #                 os.rename(output, cached_output_html)
+            #             return f'<iframe src="{cached_output_html if cache_enabled else output}" width="100%" height="600" frameborder="0" allowfullscreen></iframe>'
+            #     # Default to displaying raw output if it's not a recognized file type
+            #     return f"<pre>{output}</pre>\n"
         except Exception as e:
             return f"Error executing code: {e}\n"
 

@@ -8,6 +8,7 @@
   <section>
     <h1>Welcome to Quantum Mechanics</h1>
     <p>This document provides an overview of quantum mechanics, exploring fundamental concepts such as wave-particle duality, superposition, and entanglement.</p>
+    <h1>Inline Latex to PNG</h1>
     <latex>
       The Schrödinger equation is expressed as:
       \[
@@ -17,14 +18,11 @@
   </section>
 
   <section>
-    <h1>Experiment Analysis</h1>
-    <python src="scripts/analysis.py" />
-  </section>
-
-  <section>
-    <h1>Visualizing Quantum States</h1>
+    <h1>Python From File</h1>
+    <h2>Visualizing Quantum States With</h2>
     <p>This section provides an interactive graph to visualize quantum states over time.</p>
     <python src="scripts/plot_quantum_states.py" cache="True" />
+    <h1>Inline Python</h1>
     <python>
         # Example Python code to add two numbers
         a = 5
@@ -59,7 +57,7 @@
   </section>
 
   <section>
-    <h1>Welcome to PyML with JavaScript</h1>
+    <h1>Normal JavaScript</h1>
     <p>This is an example where you can run JavaScript.</p>
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -74,6 +72,7 @@
   </section>
 
   <footer>
+    <h1>Anchor Tag</h1>
     <a href="pages/about.pyml">Learn More About Quantum Mechanics</a>
   </footer>
 </document>
