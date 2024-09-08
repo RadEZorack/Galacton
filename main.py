@@ -7,7 +7,7 @@ import stat
 import textwrap
 from urllib.parse import urlparse, urljoin, unquote
 from sympy import preview  # For rendering LaTeX equations as images
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QMessageBox
+from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLineEdit, QPushButton, QHBoxLayout
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage, QWebEngineSettings
 from PyQt5.QtCore import QUrl
 from lxml import etree  # For parsing XML-like syntax
@@ -79,11 +79,29 @@ class PyMLRenderer(QMainWindow):
         # Main layout
         layout = QVBoxLayout()
 
+        # Create a horizontal layout for the URL bar
+        url_layout = QHBoxLayout()
+
+        # URL bar (QLineEdit)
+        self.url_bar = QLineEdit(self)
+        self.url_bar.setPlaceholderText("Enter file path or URL...")
+        self.url_bar.returnPressed.connect(self.navigate_to_url)  # Trigger navigation when Enter is pressed
+        url_layout.addWidget(self.url_bar)
+
+        # "Go" button
+        go_button = QPushButton("Go", self)
+        go_button.clicked.connect(self.navigate_to_url)  # Trigger navigation when the button is clicked
+        url_layout.addWidget(go_button)
+
+        # Add the URL layout to the main layout
+        layout.addLayout(url_layout)
+
         # Web view for displaying content
         self.web_view = QWebEngineView()
         self.web_page = CustomWebEnginePage(self)
         self.web_view.setPage(self.web_page)
         # self.web_view.urlChanged.connect(self.handle_link_click)
+        # self.web_view.urlChanged.connect(self.update_url_bar)  # Connect URL change to update method
         layout.addWidget(self.web_view)
 
         # Central widget setup
@@ -95,8 +113,25 @@ class PyMLRenderer(QMainWindow):
         self.apply_javascript_setting()
 
         # Load initial PyML content from a file
-        self.load_pyml_file("https://raw.githubusercontent.com/RadEZorack/Galacton/main/index.pyml")
+        # self.load_pyml_file("https://raw.githubusercontent.com/RadEZorack/Galacton/main/index.pyml")
         # self.load_pyml_file("index.pyml")
+        # Set initial content URL
+        initial_url = "https://raw.githubusercontent.com/RadEZorack/Galacton/main/index.pyml"
+        # initial_url = "index.pyml"
+        # self.url_bar.setText(initial_url)  # Set the initial URL in the URL bar
+        self.load_pyml_file(initial_url)
+
+    def navigate_to_url(self):
+        # Get the URL from the URL bar
+        url = self.url_bar.text()
+
+        # Call the load_pyml_file function to navigate to the entered URL
+        self.load_pyml_file(url)
+
+    # def update_url_bar(self, url):
+    #     # Update the URL bar with the current URL
+    #     print(url.toString())
+    #     self.url_bar.setText(url.toString())
 
     def apply_javascript_setting(self):
         # Use QWebEngineSettings to enable or disable JavaScript
@@ -113,6 +148,9 @@ class PyMLRenderer(QMainWindow):
             # Convert file URL to a local path if necessary
             if file_path.startswith('file://'):
                 file_path = convert_file_url_to_local_path(file_path)
+
+            # Update the URL bar with the current URL
+            self.url_bar.setText(file_path)
                 
             # Check if the path is a URL
             parsed_url = urlparse(file_path)
@@ -196,29 +234,29 @@ class PyMLRenderer(QMainWindow):
         except Exception as e:
             self.web_view.setHtml(f"<p>Error parsing PyML: {e}</p>")
 
-    def handle_link_click(self, url):
-        # Only handle the link if it's not the initial page load
-        if self.initial_load:
-            self.initial_load = False
-            return
+    # def handle_link_click(self, url):
+    #     # Only handle the link if it's not the initial page load
+    #     if self.initial_load:
+    #         self.initial_load = False
+    #         return
         
-        # Avoid recursive handling
-        if self.handling_link:
-            return
+    #     # Avoid recursive handling
+    #     if self.handling_link:
+    #         return
 
-        # Start handling the link
-        self.handling_link = True
-        url_str = url.toString()
-        print(f"url_str {url_str}")
+    #     # Start handling the link
+    #     self.handling_link = True
+    #     url_str = url.toString()
+    #     print(f"url_str {url_str}")
 
-        if url_str.endswith('.pyml'):
-            self.load_pyml_file(url_str)
-        else:
-            # For other links, navigate normally
-            self.web_view.setUrl(url)
+    #     if url_str.endswith('.pyml'):
+    #         self.load_pyml_file(url_str)
+    #     else:
+    #         # For other links, navigate normally
+    #         self.web_view.setUrl(url)
 
-        # End handling the link
-        self.handling_link = False
+    #     # End handling the link
+    #     self.handling_link = False
 
 
     def render_latex_to_image(self, latex_code):
@@ -256,8 +294,12 @@ class PyMLRenderer(QMainWindow):
             return path
 
         # If working with a remote base URL
-        if self.root_base_url and self.root_base_url.startswith('http'):
-            return urljoin(self.root_base_url, path)
+        # if self.root_base_url and self.root_base_url.startswith('http'):
+        #     return urljoin(self.root_base_url, path)
+        # Use the correct base URL (remote or local)
+        if self.current_base_url.startswith('http'):
+            # If currently using a remote base URL, use urljoin for proper resolution
+            return urljoin(self.current_base_url, path)
 
         # Otherwise, assume it's a local file path
         return os.path.abspath(os.path.join(self.current_base_url, path))
